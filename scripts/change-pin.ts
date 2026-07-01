@@ -1,6 +1,10 @@
-import { chromium } from '@playwright/test';
+import { chromium } from 'playwright-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import fs from 'fs';
 import path from 'path';
+
+chromium.use(StealthPlugin());
+
 
 const email = process.env.NETFLIX_EMAIL || "morphchrono@gmail.com";
 const password = process.env.NETFLIX_PASSWORD || "terlalunyaman1224";
@@ -312,7 +316,7 @@ async function handleProfileAndPin(page: import('@playwright/test').Page, headle
 
 async function main() {
   const chromePath = '/opt/google/chrome/chrome'
-  const launchOptions: Parameters<typeof chromium.launch>[0] = {
+  const launchOptions: any = {
     headless,
     args: ['--disable-blink-features=AutomationControlled'],
   }
