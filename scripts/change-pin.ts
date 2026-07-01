@@ -311,11 +311,17 @@ async function handleProfileAndPin(page: import('@playwright/test').Page, headle
 }
 
 async function main() {
-  const browser = await chromium.launch({
-    channel: 'chrome',
+  const chromePath = '/opt/google/chrome/chrome'
+  const launchOptions: Parameters<typeof chromium.launch>[0] = {
     headless,
     args: ['--disable-blink-features=AutomationControlled'],
-  });
+  }
+
+  if (fs.existsSync(chromePath)) {
+    launchOptions.channel = 'chrome'
+  }
+
+  const browser = await chromium.launch(launchOptions)
 
   const stateDir = path.resolve('auth');
   if (!fs.existsSync(stateDir)) {
