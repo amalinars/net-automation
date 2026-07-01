@@ -1,0 +1,22 @@
+{
+  "name": "net-automation",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Playwright automation workspace",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "codegen": "playwright codegen",
+    "trace": "playwright show-trace",
+    "netflix:change-pin": "tsx scripts/change-pin.ts",
+    "server": "tsx server.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@types/node": "^26.0.1",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
+  }
+}
