@@ -11,6 +11,7 @@
     "codegen": "playwright codegen",
     "trace": "playwright show-trace",
     "netflix:change-pin": "tsx scripts/change-pin.ts",
+    "netflix:generate-sessions": "tsx scripts/generate-sessions.ts",
     "server": "tsx server.ts"
   },
   "devDependencies": {

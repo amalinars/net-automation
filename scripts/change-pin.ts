@@ -3,7 +3,11 @@ import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import fs from 'fs';
 import path from 'path';
 
+import { fileURLToPath } from 'url';
+
 chromium.use(StealthPlugin());
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 
 const email = process.env.NETFLIX_EMAIL || "morphchrono@gmail.com";
@@ -13,6 +17,7 @@ const debug = process.env.DEBUG === 'true';
 const profileName = process.env.NETFLIX_PROFILE || "Ballerina";
 const profilePin = process.env.NETFLIX_PIN || "7836";
 const newProfilePin = process.env.NETFLIX_NEW_PIN || "7840";
+const profileId = process.env.NETFLIX_PROFILE_ID || "unknown";
 
 if (!email) {
   console.error('Missing NETFLIX_EMAIL env var');
@@ -152,7 +157,7 @@ async function handleProfileAndPin(page: import('@playwright/test').Page, headle
           const src = await img.getAttribute('src').catch(() => '');
           const alt = await img.getAttribute('alt').catch(() => '');
           // Skip logo/brand/navigation icons
-          if (src.includes('logo') || alt.toLowerCase().includes('netflix') || src.includes('avatar')) {
+          if (!src || !alt || src.includes('logo') || alt.toLowerCase().includes('netflix') || src.includes('avatar')) {
             continue;
           }
           console.log(`Clicking movie card ${clickedCount + 1}...`);
@@ -207,13 +212,13 @@ async function handleProfileAndPin(page: import('@playwright/test').Page, headle
     console.log('Waiting for Lock settings page URL transition...');
     await page.waitForURL(/\/settings\/lock\//, { timeout: 15_000 }).catch(() => {});
     await page.waitForTimeout(2000); // Give the event handlers time to attach
+    const lockPageUrl = page.url();
     console.log('>>DONE:Buka Profile Lock')
 
     console.log('Clicking Edit PIN...');
     const editPinFallback = page.locator('button, a').filter({ hasText: /Edit PIN/i }).first();
     await editPinFallback.waitFor({ state: 'visible', timeout: 15_000 });
     await editPinFallback.click();
-    console.log('>>STEP:Edit & simpan PIN')
 
     console.log('Checking if password confirmation is required...');
     await page.waitForTimeout(3000); // Wait for transition/renders
@@ -237,6 +242,11 @@ async function handleProfileAndPin(page: import('@playwright/test').Page, headle
       await submitConfirmBtn.click();
 
       await page.waitForTimeout(5000);
+      const stillVisible = await page.locator('input[type="password"], input[name="password"]').first().isVisible().catch(() => false);
+      if (stillVisible) {
+        const bodyText = await page.locator('body').innerText().catch(() => '');
+        throw new Error(`Password verification failed. Password screen is still visible. Page text: ${bodyText.slice(0, 500)}`);
+      }
       console.log('>>DONE:Verifikasi identitas')
     } else if (await confirmPwInput.isVisible().catch(() => false)) {
       console.log('>>STEP:Verifikasi identitas')
@@ -248,11 +258,17 @@ async function handleProfileAndPin(page: import('@playwright/test').Page, headle
       await submitConfirmBtn.click();
 
       await page.waitForTimeout(5000);
+      const stillVisible = await page.locator('input[type="password"], input[name="password"]').first().isVisible().catch(() => false);
+      if (stillVisible) {
+        const bodyText = await page.locator('body').innerText().catch(() => '');
+        throw new Error(`Password verification failed. Password screen is still visible. Page text: ${bodyText.slice(0, 500)}`);
+      }
       console.log('>>DONE:Verifikasi identitas')
     } else {
       console.log('No password confirmation required. Landed directly on the PIN entry page.');
     }
 
+    console.log('>>STEP:Edit & simpan PIN')
     console.log('Successfully reached the new PIN entry screen. Current URL:', page.url());
 
     // Ensure the "Require a PIN" checkbox is checked if it exists and is unchecked
@@ -297,10 +313,71 @@ async function handleProfileAndPin(page: import('@playwright/test').Page, headle
     console.log('Clicked Save PIN. Waiting for settings page to load...');
     await page.waitForTimeout(5000);
 
+    const currentUrl = page.url();
+    if (currentUrl.includes('/settings/lock')) {
+      const bodyText = await page.locator('body').innerText().catch(() => '');
+      throw new Error(`Failed to save PIN. Still on settings lock page. Page text: ${bodyText.slice(0, 500)}`);
+    }
+
     console.log('>>DONE:Edit & simpan PIN')
     console.log('PIN changed successfully. Current URL:', page.url());
+
+    // Navigate back to the lock page to verify the new PIN
+    console.log('Navigating back to lock page to take snapshot of new PIN...');
+    await page.goto(lockPageUrl, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(3000);
+
+    // If it asks for password verification again, do it
+    const confirmPwInputAfter = page.locator('input[type="password"], input[name="password"]').filter({ visible: true }).first();
+    if (await confirmPwInputAfter.isVisible().catch(() => false)) {
+      console.log('Password verification required to view PIN. Entering password...');
+      await confirmPwInputAfter.fill(password);
+      const submitConfirmBtn = page.locator('button[type="submit"], button').filter({ hasText: /Submit/i }).first();
+      await submitConfirmBtn.click();
+      await page.waitForTimeout(5000);
+    }
+
+    console.log('Clicking Edit PIN to show actual PIN inputs...');
+    const editPinBtn = page.locator('button, a').filter({ hasText: /Edit PIN/i }).first();
+    await editPinBtn.waitFor({ state: 'visible', timeout: 15_000 });
+    await editPinBtn.click();
+    await page.waitForTimeout(3000);
+
+    // If password verification is prompted after clicking Edit PIN
+    const confirmPwInputAfterEdit = page.locator('input[type="password"], input[name="password"]').filter({ visible: true }).first();
+    if (await confirmPwInputAfterEdit.isVisible().catch(() => false)) {
+      console.log('Password verification required after clicking Edit PIN. Entering password...');
+      await confirmPwInputAfterEdit.fill(password);
+      const submitConfirmBtn = page.locator('button[type="submit"], button').filter({ hasText: /Submit/i }).first();
+      await submitConfirmBtn.click();
+      await page.waitForTimeout(5000);
+    }
+
+    // Wait for the PIN inputs to be visible
+    console.log('Waiting for PIN inputs to be visible for the snapshot...');
+    const pinInputs = page.locator('input[type="text"], input[type="number"], input[type="tel"]').filter({ visible: true }).first();
+    await pinInputs.waitFor({ state: 'visible', timeout: 15_000 });
+    await page.waitForTimeout(1000); // Wait a second for values to render
+
+    // Now take a screenshot of the page showing the PIN
+    const snapshotsDir = path.resolve(__dirname, '../snapshots');
+    if (!fs.existsSync(snapshotsDir)) {
+      fs.mkdirSync(snapshotsDir, { recursive: true });
+    }
+    const snapshotPath = path.join(snapshotsDir, `${profileId}.png`);
+    
+    // Delete previous snapshot if exists
+    if (fs.existsSync(snapshotPath)) {
+      console.log(`Deleting previous snapshot at: ${snapshotPath}`);
+      fs.unlinkSync(snapshotPath);
+    }
+
+    console.log('Taking snapshot of the profile lock page...');
+    await page.screenshot({ path: snapshotPath, fullPage: true });
+    console.log(`Snapshot saved successfully to: ${snapshotPath}`);
   } catch (error) {
     console.error('Error in handleProfileAndPin:', error);
+    throw error;
   }
 
   // Keep browser open if not headless
@@ -325,7 +402,26 @@ async function main() {
     launchOptions.channel = 'chrome'
   }
 
-  const browser = await chromium.launch(launchOptions)
+  let browser;
+  try {
+    browser = await chromium.launch(launchOptions);
+  } catch (err: any) {
+    const errMsg = err?.message || String(err);
+    if (errMsg.includes('playwright install') || errMsg.includes("Executable doesn't exist")) {
+      console.log('Playwright browser executable is missing. Attempting to automatically run "npx playwright install"...');
+      try {
+        const { execSync } = await import('node:child_process');
+        execSync('npx playwright install', { stdio: 'inherit' });
+        console.log('Playwright browsers installed successfully. Retrying browser launch...');
+        browser = await chromium.launch(launchOptions);
+      } catch (installErr) {
+        console.error('Failed to auto-install Playwright browsers:', installErr);
+        throw err;
+      }
+    } else {
+      throw err;
+    }
+  }
 
   const stateDir = path.resolve('auth');
   if (!fs.existsSync(stateDir)) {
@@ -475,25 +571,22 @@ async function main() {
       console.log(`Saved session to: ${statePath}`);
       console.log('>>DONE:Login ke Netflix')
       await handleProfileAndPin(page, headless);
+    } else {
+      if (debug) {
+        await page.screenshot({ path: 'artifacts/netflix-login-state.png', fullPage: true });
+      }
+      console.log(JSON.stringify({
+        ok: false,
+        status,
+        url: page.url(),
+        emailValue: await emailInput.first().inputValue().catch(() => ''),
+        usePasswordInsteadVisible,
+        bodyTextBeforeHelp: bodyText1,
+        bodyTextAfterFlow: (await page.locator('body').innerText().catch(() => '')).slice(0, 3000),
+        screenshot: debug ? 'artifacts/netflix-login-state.png' : undefined
+      }, null, 2));
+      throw new Error(`Netflix login failed (status: ${status})`);
     }
-
-    const bodyText2 = (await page.locator('body').innerText().catch(() => '')).slice(0, 3000);
-    const emailValue = await emailInput.first().inputValue().catch(() => '');
-
-    if (debug) {
-      await page.screenshot({ path: 'artifacts/netflix-login-state.png', fullPage: true });
-    }
-
-    console.log(JSON.stringify({
-      ok: loginSuccess,
-      status,
-      url: page.url(),
-      emailValue,
-      usePasswordInsteadVisible,
-      bodyTextBeforeHelp: bodyText1,
-      bodyTextAfterFlow: bodyText2,
-      screenshot: debug ? 'artifacts/netflix-login-state.png' : undefined
-    }, null, 2));
   } finally {
     await context.close();
     await browser.close();

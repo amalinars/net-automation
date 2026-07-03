@@ -2,6 +2,7 @@ import http from 'node:http'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import fs from 'node:fs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000
@@ -9,7 +10,7 @@ const tsxBin = path.resolve(__dirname, 'node_modules/.bin/tsx')
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 } as const
 
@@ -41,6 +42,21 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(204)
     res.end()
     return
+  }
+
+  if (req.method === 'GET' && req.url?.startsWith('/snapshots/')) {
+    const cleanUrl = req.url.split('?')[0]
+    const filename = path.basename(cleanUrl)
+    const filePath = path.join(__dirname, 'snapshots', filename)
+    if (fs.existsSync(filePath)) {
+      setCors(res)
+      res.writeHead(200, { 'Content-Type': 'image/png' })
+      fs.createReadStream(filePath).pipe(res)
+      return
+    } else {
+      json(res, 404, { ok: false, error: 'Snapshot not found' })
+      return
+    }
   }
 
   if (req.method !== 'POST' || req.url !== '/change-pin') {
@@ -95,6 +111,7 @@ const server = http.createServer(async (req, res) => {
       NETFLIX_EMAIL: email,
       NETFLIX_PASSWORD: password,
       NETFLIX_PROFILE: profileName,
+      NETFLIX_PROFILE_ID: profileId,
       NETFLIX_PIN: oldPin,
       NETFLIX_NEW_PIN: newPin,
       HEADLESS: 'true',
