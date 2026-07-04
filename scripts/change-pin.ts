@@ -44,6 +44,12 @@ async function waitForVisible(page: import('@playwright/test').Page, selectors: 
   return null;
 }
 
+async function isSomethingWentWrong(page: import('@playwright/test').Page): Promise<boolean> {
+  const bodyText = await page.locator('body').innerText().catch(() => '');
+  return bodyText.includes('Something went wrong. Please try again in a few minutes') || 
+         bodyText.includes('Something went wrong. Please try again in a few minutes.');
+}
+
 async function handleProfileAndPin(page: import('@playwright/test').Page, headless: boolean) {
   if (!profileName) {
     console.log('No profile specified. Skipping profile selection.');
@@ -490,12 +496,29 @@ async function main() {
       return;
     }
 
-    const emailInput = page.locator('input[name="userLoginId"], input[type="email"]');
-    await emailInput.first().waitFor({ state: 'visible', timeout: 30_000 });
-    await emailInput.first().fill(email);
+    if (await isSomethingWentWrong(page)) {
+      throw new Error('Netflix login page blocked (Something went wrong)');
+    }
+
+    const emailInput = page.locator('input[name="userLoginId"], input[type="email"]').first();
+    await emailInput.waitFor({ state: 'visible', timeout: 30_000 });
+    await emailInput.focus();
+    await page.keyboard.type(email, { delay: 100 });
+    await page.waitForTimeout(1000);
+
+    if (await isSomethingWentWrong(page)) {
+      throw new Error('Netflix login page blocked after email input (Something went wrong)');
+    }
 
     const continueButton = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Sign In")').first();
-    await continueButton.click();
+    if (await continueButton.isVisible().catch(() => false)) {
+      await continueButton.click();
+      await page.waitForTimeout(2000);
+    }
+
+    if (await isSomethingWentWrong(page)) {
+      throw new Error('Netflix login page blocked after clicking continue (Something went wrong)');
+    }
 
     // Now wait for the state transition. We can wait for input[name="challengeOtp"] (OTP screen)
     const isOtpScreen = await page.locator('input[name="challengeOtp"]').first().waitFor({ state: 'visible', timeout: 15_000 })
@@ -525,11 +548,18 @@ async function main() {
       if (usePasswordInsteadVisible) {
         status = 'use-password-instead-visible';
         await passwordOption.click();
+        await page.waitForTimeout(2000);
+
+        if (await isSomethingWentWrong(page)) {
+          throw new Error('Netflix login page blocked on Use Password Instead screen (Something went wrong)');
+        }
 
         // Wait for password field
         const pwInput = page.locator('input[name="password"], input[type="password"]').first();
         await pwInput.waitFor({ state: 'visible', timeout: 15_000 });
-        await pwInput.fill(password);
+        await pwInput.focus();
+        await page.keyboard.type(password, { delay: 100 });
+        await page.waitForTimeout(1000);
 
         // Submit password
         const submitButton = page.locator('button[type="submit"], button:has-text("Sign In"), button:has-text("Continue")').first();
@@ -537,6 +567,10 @@ async function main() {
 
         // Wait for page load / redirect
         await page.waitForTimeout(5000);
+
+        if (await isSomethingWentWrong(page)) {
+          throw new Error('Netflix login page blocked after password submit (Something went wrong)');
+        }
 
         // Check if we are logged in
         const currentUrl = page.url();
@@ -552,10 +586,17 @@ async function main() {
       // If OTP screen didn't show, check if password input is visible
       const pwInput = page.locator('input[name="password"], input[type="password"]').first();
       if (await pwInput.isVisible().catch(() => false)) {
-        await pwInput.fill(password);
+        await pwInput.focus();
+        await page.keyboard.type(password, { delay: 100 });
+        await page.waitForTimeout(1000);
+
         const submitButton = page.locator('button[type="submit"], button:has-text("Sign In"), button:has-text("Continue")').first();
         await submitButton.click();
         await page.waitForTimeout(5000);
+
+        if (await isSomethingWentWrong(page)) {
+          throw new Error('Netflix login page blocked after password submit (Something went wrong)');
+        }
 
         const currentUrl = page.url();
         const bodyTextAfterClick = await page.locator('body').innerText().catch(() => '');
@@ -583,7 +624,7 @@ async function main() {
     if (loginSuccess) {
       await context.storageState({ path: statePath });
       console.log(`Saved session to: ${statePath}`);
-      console.log('>>DONE:Login ke Netflix')
+      console.log('>>DONE:Login ke Netflix');
       await handleProfileAndPin(page, headless);
       deleteErrorSnapshot();
     } else {
