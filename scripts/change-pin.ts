@@ -222,14 +222,14 @@ async function handleProfileAndPin(page: import('@playwright/test').Page, headle
     console.log('>>DONE:Buka Profile Lock')
 
     console.log('Clicking Edit PIN...');
-    const editPinFallback = page.locator('button, a').filter({ hasText: /Edit PIN|Ubah/i }).first();
+    const editPinFallback = page.locator('button, a').filter({ hasText: /Edit PIN|Ubah/i }).filter({ visible: true }).first();
     await editPinFallback.waitFor({ state: 'visible', timeout: 15_000 });
     await editPinFallback.click();
 
     console.log('Checking if password confirmation is required...');
     await page.waitForTimeout(3000); // Wait for transition/renders
 
-    const confirmPasswordBtn = page.locator('button, a').filter({ hasText: /Confirm password|Konfirmasi/i }).first();
+    const confirmPasswordBtn = page.locator('button, a').filter({ hasText: /Confirm password|Konfirmasi/i }).filter({ visible: true }).first();
     const confirmPwInput = page.locator('input[type="password"], input[name="password"], input[placeholder*="Password" i], input[placeholder*="Sandi" i]').filter({ visible: true }).first();
 
     if (await confirmPasswordBtn.isVisible().catch(() => false)) {
@@ -244,7 +244,7 @@ async function handleProfileAndPin(page: import('@playwright/test').Page, headle
       await inputField.fill(password);
 
       console.log('Submitting password confirmation...');
-      const submitConfirmBtn = page.locator('button[type="submit"], button').filter({ hasText: /Submit|Lanjutkan|Kirim|Simpan/i }).first();
+      const submitConfirmBtn = page.locator('button[type="submit"], button').filter({ hasText: /Submit|Lanjutkan|Kirim|Simpan/i }).filter({ visible: true }).first();
       await submitConfirmBtn.click();
 
       await page.waitForTimeout(5000);
@@ -260,7 +260,7 @@ async function handleProfileAndPin(page: import('@playwright/test').Page, headle
       await confirmPwInput.fill(password);
 
       console.log('Submitting password confirmation...');
-      const submitConfirmBtn = page.locator('button[type="submit"], button').filter({ hasText: /Submit|Lanjutkan|Kirim|Simpan/i }).first();
+      const submitConfirmBtn = page.locator('button[type="submit"], button').filter({ hasText: /Submit|Lanjutkan|Kirim|Simpan/i }).filter({ visible: true }).first();
       await submitConfirmBtn.click();
 
       await page.waitForTimeout(5000);
@@ -313,7 +313,7 @@ async function handleProfileAndPin(page: import('@playwright/test').Page, headle
 
     // Save the new PIN
     console.log('Saving the new PIN...');
-    const savePinBtn = page.locator('button').filter({ hasText: /Save|Simpan/i }).first();
+    const savePinBtn = page.locator('button').filter({ hasText: /Save|Simpan/i }).filter({ visible: true }).first();
     await savePinBtn.waitFor({ state: 'visible', timeout: 15_000 });
     await savePinBtn.click();
     console.log('Clicked Save PIN. Waiting for settings page to load...');
@@ -338,13 +338,13 @@ async function handleProfileAndPin(page: import('@playwright/test').Page, headle
     if (await confirmPwInputAfter.isVisible().catch(() => false)) {
       console.log('Password verification required to view PIN. Entering password...');
       await confirmPwInputAfter.fill(password);
-      const submitConfirmBtn = page.locator('button[type="submit"], button').filter({ hasText: /Submit|Lanjutkan|Kirim|Simpan/i }).first();
+      const submitConfirmBtn = page.locator('button[type="submit"], button').filter({ hasText: /Submit|Lanjutkan|Kirim|Simpan/i }).filter({ visible: true }).first();
       await submitConfirmBtn.click();
       await page.waitForTimeout(5000);
     }
 
     console.log('Clicking Edit PIN to show actual PIN inputs...');
-    const editPinBtn = page.locator('button, a').filter({ hasText: /Edit PIN|Ubah/i }).first();
+    const editPinBtn = page.locator('button, a').filter({ hasText: /Edit PIN|Ubah/i }).filter({ visible: true }).first();
     await editPinBtn.waitFor({ state: 'visible', timeout: 15_000 });
     await editPinBtn.click();
     await page.waitForTimeout(3000);
@@ -354,7 +354,7 @@ async function handleProfileAndPin(page: import('@playwright/test').Page, headle
     if (await confirmPwInputAfterEdit.isVisible().catch(() => false)) {
       console.log('Password verification required after clicking Edit PIN. Entering password...');
       await confirmPwInputAfterEdit.fill(password);
-      const submitConfirmBtn = page.locator('button[type="submit"], button').filter({ hasText: /Submit|Lanjutkan|Kirim|Simpan/i }).first();
+      const submitConfirmBtn = page.locator('button[type="submit"], button').filter({ hasText: /Submit|Lanjutkan|Kirim|Simpan/i }).filter({ visible: true }).first();
       await submitConfirmBtn.click();
       await page.waitForTimeout(5000);
     }
