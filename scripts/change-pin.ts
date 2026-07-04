@@ -446,6 +446,19 @@ async function main() {
 
   const page = await context.newPage();
 
+  const deleteErrorSnapshot = () => {
+    const snapshotsDir = path.resolve(__dirname, '../snapshots');
+    const errorSnapshotPath = path.join(snapshotsDir, `${profileId}_error.png`);
+    if (fs.existsSync(errorSnapshotPath)) {
+      console.log(`Deleting error snapshot at: ${errorSnapshotPath}`);
+      try {
+        fs.unlinkSync(errorSnapshotPath);
+      } catch (err) {
+        console.error(`Failed to delete error snapshot: ${err}`);
+      }
+    }
+  };
+
   try {
     console.log('>>STEP:Login ke Netflix')
     await page.goto('https://www.netflix.com/login', {
@@ -473,6 +486,7 @@ async function main() {
       }, null, 2));
       console.log('>>DONE:Login ke Netflix')
       await handleProfileAndPin(page, headless);
+      deleteErrorSnapshot();
       return;
     }
 
@@ -571,6 +585,7 @@ async function main() {
       console.log(`Saved session to: ${statePath}`);
       console.log('>>DONE:Login ke Netflix')
       await handleProfileAndPin(page, headless);
+      deleteErrorSnapshot();
     } else {
       if (debug) {
         await page.screenshot({ path: 'artifacts/netflix-login-state.png', fullPage: true });
@@ -587,6 +602,20 @@ async function main() {
       }, null, 2));
       throw new Error(`Netflix login failed (status: ${status})`);
     }
+  } catch (error) {
+    try {
+      const snapshotsDir = path.resolve(__dirname, '../snapshots');
+      if (!fs.existsSync(snapshotsDir)) {
+        fs.mkdirSync(snapshotsDir, { recursive: true });
+      }
+      const errorSnapshotPath = path.join(snapshotsDir, `${profileId}_error.png`);
+      console.log(`Taking error snapshot at: ${errorSnapshotPath}`);
+      await page.screenshot({ path: errorSnapshotPath, fullPage: true });
+      console.log('Error snapshot taken successfully.');
+    } catch (screenshotErr) {
+      console.error('Failed to take error snapshot:', screenshotErr);
+    }
+    throw error;
   } finally {
     await context.close();
     await browser.close();
