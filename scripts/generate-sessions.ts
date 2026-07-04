@@ -107,77 +107,87 @@ async function runLoginForAccount(account: typeof ACCOUNTS[0]) {
       timeout: 60_000,
     });
 
-    if (await isSomethingWentWrong(page)) {
-      console.log('⚠️ Rate limit / block detected (Something went wrong). Skipping this account...');
-      return;
-    }
-
-    // Auto-fill email
-    const emailInput = page.locator('input[name="userLoginId"], input[type="email"]').first();
-    await emailInput.waitFor({ state: 'visible', timeout: 15_000 });
-    await emailInput.focus();
-    await page.keyboard.type(email, { delay: 100 });
-    console.log('Typed email with human delay...');
-
-    // Wait a brief moment, then look for Continue or Password
-    await page.waitForTimeout(1000);
+    let skippedAutoFill = false;
 
     if (await isSomethingWentWrong(page)) {
-      console.log('⚠️ Rate limit / block detected (Something went wrong). Skipping this account...');
-      return;
+      console.log('⚠️ Rate limit / block detected (Something went wrong) on initial load.');
+      console.log('Please refresh the page, solve CAPTCHA, or type credentials manually in the browser window.');
+      skippedAutoFill = true;
     }
 
-    const continueButton = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Sign In")').first();
-    if (await continueButton.isVisible().catch(() => false)) {
-      await continueButton.click();
-      console.log('Clicked Continue/Sign-in button...');
-    }
+    if (!skippedAutoFill) {
+      // Auto-fill email
+      const emailInput = page.locator('input[name="userLoginId"], input[type="email"]').first();
+      await emailInput.waitFor({ state: 'visible', timeout: 15_000 });
+      await emailInput.focus();
+      await page.keyboard.type(email, { delay: 100 });
+      console.log('Typed email with human delay...');
 
-    // Check if OTP or direct password input appears
-    await page.waitForTimeout(3000);
+      // Wait a brief moment, then look for Continue or Password
+      await page.waitForTimeout(1000);
 
-    if (await isSomethingWentWrong(page)) {
-      console.log('⚠️ Rate limit / block detected (Something went wrong). Skipping this account...');
-      return;
-    }
-
-    const isOtpScreen = await page.locator('input[name="challengeOtp"]').first().isVisible().catch(() => false);
-    const pwInput = page.locator('input[name="password"], input[type="password"]').first();
-
-    if (isOtpScreen) {
-      console.log('OTP screen detected. Attempting to click "Use password instead"...');
-      const getHelpButton = page.getByRole('button', { name: /get help/i }).first();
-      const getHelpLink = page.getByRole('link', { name: /get help/i }).first();
-      if (await getHelpButton.isVisible().catch(() => false)) {
-        await getHelpButton.click();
-      } else if (await getHelpLink.isVisible().catch(() => false)) {
-        await getHelpLink.click();
-      }
-
-      const passwordOption = page.getByText('Use password instead', { exact: false }).first();
-      await passwordOption.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
-      if (await passwordOption.isVisible().catch(() => false)) {
-        await passwordOption.click();
-        console.log('Clicked "Use password instead"');
-        await page.waitForTimeout(2000);
+      if (await isSomethingWentWrong(page)) {
+        console.log('⚠️ Rate limit / block detected after typing email.');
+        console.log('Please type your credentials manually in the browser window.');
+        skippedAutoFill = true;
       }
     }
 
-    if (await isSomethingWentWrong(page)) {
-      console.log('⚠️ Rate limit / block detected (Something went wrong). Skipping this account...');
-      return;
+    if (!skippedAutoFill) {
+      const continueButton = page.locator('button[type="submit"], button:has-text("Continue"), button:has-text("Sign In")').first();
+      if (await continueButton.isVisible().catch(() => false)) {
+        await continueButton.click();
+        console.log('Clicked Continue/Sign-in button...');
+      }
+
+      // Check if OTP or direct password input appears
+      await page.waitForTimeout(3000);
+
+      if (await isSomethingWentWrong(page)) {
+        console.log('⚠️ Rate limit / block detected after email submission.');
+        console.log('Please type your credentials manually in the browser window.');
+        skippedAutoFill = true;
+      }
     }
 
-    // Auto-fill password if visible
-    if (await pwInput.isVisible().catch(() => false)) {
-      await pwInput.focus();
-      await page.keyboard.type(password, { delay: 100 });
-      console.log('Typed password with human delay...');
-      const submitButton = page.locator('button[type="submit"], button:has-text("Sign In"), button:has-text("Continue")').first();
-      await submitButton.click();
-      console.log('Submitted login credentials...');
-    } else {
-      console.log('Password input not immediately visible or auto-filled. Please type/confirm manually if needed.');
+    if (!skippedAutoFill) {
+      const isOtpScreen = await page.locator('input[name="challengeOtp"]').first().isVisible().catch(() => false);
+      const pwInput = page.locator('input[name="password"], input[type="password"]').first();
+
+      if (isOtpScreen) {
+        console.log('OTP screen detected. Attempting to click "Use password instead"...');
+        const getHelpButton = page.getByRole('button', { name: /get help/i }).first();
+        const getHelpLink = page.getByRole('link', { name: /get help/i }).first();
+        if (await getHelpButton.isVisible().catch(() => false)) {
+          await getHelpButton.click();
+        } else if (await getHelpLink.isVisible().catch(() => false)) {
+          await getHelpLink.click();
+        }
+
+        const passwordOption = page.getByText('Use password instead', { exact: false }).first();
+        await passwordOption.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
+        if (await passwordOption.isVisible().catch(() => false)) {
+          await passwordOption.click();
+          console.log('Clicked "Use password instead"');
+          await page.waitForTimeout(2000);
+        }
+      }
+
+      if (await isSomethingWentWrong(page)) {
+        console.log('⚠️ Rate limit / block detected before password input.');
+        console.log('Please type your credentials manually in the browser window.');
+        skippedAutoFill = true;
+      }
+
+      // Auto-fill password if visible
+      if (!skippedAutoFill && pwInput && await pwInput.isVisible().catch(() => false)) {
+        await pwInput.focus();
+        await page.keyboard.type(password, { delay: 100 });
+        console.log('Typed password with human delay...');
+        const submitButton = page.locator('button[type="submit"], button:has-text("Sign In"), button:has-text("Continue")').first();
+        await submitButton.click();
+        console.log('Submitted login credentials...');
+      }
     }
 
     console.log('\n--- MANUAL INTERACTION REQUIRED ---');
